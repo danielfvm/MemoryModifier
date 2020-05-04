@@ -8,9 +8,11 @@ It can also be used for creating patterns to search in your own C scripts.
 Installation
 ============
 
-``$ cd MemoryModifier``
-``$ make``
-``$ make install``
+``
+$ cd MemoryModifier
+$ make
+$ make install
+``
 
 Use MemoryModifier
 ==================
