@@ -9,9 +9,9 @@ Installation
 ============
 
 ``
-$ cd MemoryModifier
-$ make
-$ make install
+$ cd MemoryModifier 
+$ make 
+$ make install 
 ``
 
 Use MemoryModifier
