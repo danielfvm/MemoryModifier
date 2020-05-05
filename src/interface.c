@@ -1,4 +1,19 @@
-// Author Daniel Schloegl
+/*
+    This file is part of MemoryModifier.
+
+    MemoryModifier is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 2 of the License, or
+    (at your option) any later version.
+
+    MemoryModifier is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with MemoryModifier.  If not, see <https://www.gnu.org/licenses/>.
+*/
 
 #define DEF_NAME "MemoryModifier"
 #define DEF_VERSION "0.1-a1"
@@ -193,7 +208,7 @@ void cmd_show(Command *cmd, char **args, size_t len) {
         return;
     }
 
-    showRange(reg, strtol(args[1], NULL, 16), len > 2 ? atoi(args[2]) : 0, len > 3 ? atoi(args[3]) : 4);
+    showRange(p, &reg, strtol(args[1], NULL, 16), len > 2 ? atoi(args[2]) : 0, len > 3 ? atoi(args[3]) : 4);
 }
 
 void addCommand(char *name, char *usage, char *desc, void (*call)(Command*, char**, size_t)) {

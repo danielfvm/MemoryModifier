@@ -1,59 +1,31 @@
+/*
+    This file is part of MemoryModifier.
+
+    MemoryModifier is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 2 of the License, or
+    (at your option) any later version.
+
+    MemoryModifier is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with MemoryModifier.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
 #include "MemoryModifier.h"
 
 #include <string.h> 
 #include <dirent.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <time.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>  
-
-#include <unistd.h>
-
-
-bool findBaseAddress(Process *p, const char *module) {
-
-    if (p == NULL) {
-        fprintf(stderr, "Process is NULL\n");
-        return 0;
-    }
-
-    FILE *f_maps;
-    char n_maps[1024];
-    char start_address[1024];
-    char end_address[1024];
-
-    sprintf(n_maps, "/proc/%lu/maps", p->p_id);
-
-    if ((f_maps = fopen(n_maps, "r")) == NULL) {
-        fprintf(stderr, "Failed to open file %s\n", n_maps);
-        return 0;
-    }
-
-    while (fgets(start_address, 1024, f_maps) && memcpy(end_address, start_address, 1024)) {
-        if (strstr(start_address, module == NULL ? "r-xp" : module) == NULL) {
-            continue;
-        }
-
-        start_address[(long)strstr(start_address, "-") - (long)start_address] = '\0';
-        end_address[(long)strstr(end_address, " ") - (long)end_address] = '\0';
-
-        long start = strtol(start_address, NULL, 16);
-        long end = strtol(end_address + strlen(start_address) + 1, NULL, 16);
-
-        p->b_addr = start;
-        p->b_size = end - start;
-
-        return 1;
-    }
-
-
-    fclose(f_maps);
-
-    fprintf(stderr, "Failed to find module\n");
-    return 0;
-}
 
 //  TODO: Maybe the size is not enough
 MemoryRegion* getMemoryRegions(Process *p, size_t *size) {
@@ -502,7 +474,7 @@ uint64_t getAddressByPattern(MemoryRegion reg, const uint64_t start, byte *patte
     return 0;
 }
 
-void showRange(MemoryRegion reg, uint64_t address, int start, int end) {
+void showRange(Process *p, MemoryRegion *reg, uint64_t address, int start, int end) {
     int64_t range = end - start;
     int i, j, cw, row, col;
 
@@ -515,7 +487,7 @@ void showRange(MemoryRegion reg, uint64_t address, int start, int end) {
     memset(status, 1, range);
 
     cw = 0;
-    if (!readProcessMemory(reg, reg.start + address + start, cw ? buffer1 : buffer, range)) {
+    if (!readProcessMemory(*reg, reg->start + address + start, cw ? buffer1 : buffer, range)) {
         printf("\x1b[31;1mE:\x1b[0m Failed to read memory!\n");
         return;
     }
@@ -542,8 +514,12 @@ void showRange(MemoryRegion reg, uint64_t address, int start, int end) {
             scrollok(stdscr, FALSE);
             nodelay(stdscr, FALSE);
 
-//            closeProcess(p);
-//            p = openProcess("supertux", "heap");
+            closeProcess(p);
+            p = openProcess("supertux");
+
+            if (!getMemoryRegion(p, reg->name, reg)) {
+                fprintf(stderr, "Failed to find mem region\n");
+            }
 
             printf("Address?\n");
             scanf("%x", &address);
@@ -559,7 +535,7 @@ void showRange(MemoryRegion reg, uint64_t address, int start, int end) {
             nodelay(stdscr, FALSE);
 
             fflush(stdout);
-            printf("\nPattern: ");
+            printf("\n\n\nPattern: ");
             fflush(stdout);
             for (i = start; i < end; ++ i) {
                 if (status[i - start]) {
@@ -588,10 +564,10 @@ void showRange(MemoryRegion reg, uint64_t address, int start, int end) {
         }
 
         cw = !cw;
-        readProcessMemory(reg, reg.start + address + start, cw ? buffer1 : buffer, range);
+        readProcessMemory(*reg, reg->start + address + start, cw ? buffer1 : buffer, range);
 
         for (i = start; i < end; i += 4) {
-            readProcessMemory(reg, reg.start + address + i, number, 4);
+            readProcessMemory(*reg, reg->start + address + i, number, 4);
 
             char f[80];
             sprintf(f, "%f", getValue(float, number));
