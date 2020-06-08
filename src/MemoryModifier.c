@@ -101,7 +101,7 @@ MemoryRegion* getMemoryRegions(Process *p, size_t *size) {
     return m_regions;
 }
 
-bool getMemoryRegion(Process* p, char* m_name, MemoryRegion* m_region) {
+bool getMemoryRegion(Process *p, char *m_name, MemoryRegion *m_region) {
     for (int i = 0; p->m_regions_size; ++ i) {
         if (strstr(p->m_regions[i].name, m_name) != NULL) {
             *m_region = p->m_regions[i];
@@ -196,25 +196,6 @@ void closeProcess(Process *p) {
     }
     free(p->m_regions);
     free(p);
-}
-
-bool signaturePayload(MemoryRegion reg, const byte *signature, byte *payload, const uint32_t siglen, const uint32_t paylen, const uint32_t bsize, const int offset) {
-    byte *buf = malloc(siglen * bsize);
-
-    for (int i = 0; readProcessMemory(reg, reg.start + i, buf, siglen * bsize); i += siglen * bsize) {
-        for (int j = 0; j < ((siglen * bsize) - (siglen - 1)); ++ j) {
-            if (memcmp(buf + j, signature, siglen) == 0) {
-                printf("Signature found!\n");
-                if (payload != NULL) {
-                    writeProcessMemory(reg, reg.start + i + j + offset, payload, paylen);
-                }
-                goto end;
-            }
-        }
-    }
-    end:
-    free(buf);
-    return 1;
 }
 
 bool writeProcessMemory(MemoryRegion reg, uint64_t address, byte *buffer, const int64_t size) {
@@ -477,6 +458,10 @@ uint64_t getAddressByPattern(MemoryRegion reg, const uint64_t start, byte *patte
 void showRange(Process *p, MemoryRegion *reg, uint64_t address, int start, int end) {
     int64_t range = end - start;
     int i, j, cw, row, col;
+
+    // 4 bytes per line
+    start *= 4;
+    end *= 4;
 
     byte *status = malloc(range);
     byte *buffer = malloc(range);

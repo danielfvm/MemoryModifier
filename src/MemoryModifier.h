@@ -85,9 +85,7 @@ Process* openProcess(char *p_name);
 
 void closeProcess(Process *p);
 
-bool getMemoryRegion(Process* p, char* m_name, MemoryRegion* m_region);
-
-bool signaturePayload(MemoryRegion reg, const byte *signature, byte *payload, const uint32_t siglen, const uint32_t paylen, const uint32_t bsize, const int offset);
+bool getMemoryRegion(Process *p, char *m_name, MemoryRegion *m_region);
 
 bool writeProcessMemory(MemoryRegion reg, uint64_t address, byte *buffer, const int64_t size);
 

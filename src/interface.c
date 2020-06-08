@@ -276,7 +276,7 @@ int main() {
             if (args[0][i] == ':') {
                 long x = atol(input + 1);
                 found = 1;
-                printf("%p\n", (p != NULL && x >= 0 && x < 100) ? p->history[x] : 0x0);
+                printf("%x\n", (p != NULL && x >= 0 && x < 100) ? p->history[x] : 0x0);
                 break;
             }
 
