@@ -65,9 +65,9 @@ int main() {
 
     // set payload until q is pressed
     while (getch() != 'q') {
-        writeProcessMemory(heap, heap.start + addr - 80, getBytes(int, 9999), 4);   // coins
-        writeProcessMemory(heap, heap.start + addr - 76, getBytes(int, 2), 4);      // player state
-        writeProcessMemory(heap, heap.start + addr - 72, getBytes(int, 1), 4);      // enable fire shooting
+        writeProcessMemory(heap, heap.start + addr - 0x50, getBytes(int, 9999), 4);   // coins
+        writeProcessMemory(heap, heap.start + addr - 0x4C, getBytes(int, 2), 4);      // player state
+        writeProcessMemory(heap, heap.start + addr - 0x48, getBytes(int, 1), 4);      // enable fire shooting
         writeProcessMemory(heap, heap.start + addr2 + 0x40, getBytes(byte, 1), 1);    // fly hack, setting onground true
     } 
 
