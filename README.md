@@ -47,7 +47,7 @@ if (getMemoryRegion(p, "[heap]", &heap) == 0) {
 ```c
 byte number[4];
 if (readProcessMemory(heap, heap.start + offset, number, sizeof(int)) == 0) {
-    fprintf(stderr, "Failed to write to memory");
+    fprintf(stderr, "Failed to read memory");
 }
 ```
 
