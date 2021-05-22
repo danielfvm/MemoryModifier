@@ -1,12 +1,35 @@
-build:
-	mkdir -p bin obj
-	gcc -shared -o obj/MemoryModifier.so -fPIC src/MemoryModifier.c -lncurses
-	gcc -c src/main.c -o obj/main.o -lncurses
-	gcc obj/main.o obj/MemoryModifier.so -o bin/load -lm -lncurses
-	gcc -c src/interface.c -o obj/interface.o -lncurses
-	gcc obj/interface.o obj/MemoryModifier.so -o bin/mm -lm -lncurses
+CC = g++
+CFLAGS = -fPIC -c -g -Wall
+LDFLAGS = -shared -fPIC -ldl
+TARGET = libmemmod.so
 
-install:
-	sudo cp bin/mm /usr/bin/mm
+SOURCE = src/Process.cpp src/MemoryRegion.cpp src/ptrace.cpp
+OBJ = $(subst src, obj, $(SOURCE:.cpp=.o))
+
+all: folders $(SOURCE) $(TARGET)
+
+$(TARGET): $(OBJ)
+	$(CC) $(LDFLAGS) $(OBJ) -o bin/$@
+
+obj/%.o: src/%.cpp
+	$(CC) $(CFLAGS) -o $@ $<
+
+folders:
+	mkdir -p bin obj
+
+install: all
 	sudo cp src/MemoryModifier.h /usr/include/MemoryModifier.h
-	sudo cp obj/MemoryModifier.so /usr/lib/libmm.so
+	sudo cp bin/$(TARGET) /usr/lib/$(TARGET)
+
+uninstall:
+	sudo rm /usr/include/MemoryModifier.h
+	sudo rm /usr/lib/$(TARGET)
+
+example: all
+	cd examples/ImGuiSDL && make
+
+test: clean all
+	$(CC) -fPIC -ldl ./bin/libmemmod.so src/main.cpp -o ./bin/inject
+
+clean:
+	rm -rf bin obj
