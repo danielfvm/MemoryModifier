@@ -16,8 +16,9 @@
     along with MemoryModifier.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include <MemoryModifier.h>
+#include "../../src/MemoryModifier.h"
 
+#include <dlfcn.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -48,7 +49,7 @@ int main(int argc, char** argv) {
     printf("sharedlib_addr: %p\n", (void*)sharedlib_addr);
 
     // Replace the pointer in the GOT with our modified function
-    process.writeMemory<uint64_t>(process.getStart() + result.offset, sharedlib_addr, sizeof(uint64_t));
+//    process.writeMemory<uint64_t>(process.getStart() + result.offset, sharedlib_addr, sizeof(uint64_t));
 
     return 0;
 }

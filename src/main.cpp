@@ -16,6 +16,7 @@
     along with MemoryModifier.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+
 #include "MemoryModifier.h"
 
 #include <stdlib.h>
@@ -27,10 +28,11 @@
 
 #include "util.h"
 
+
 int main(int argc, char** argv) {
     Process process("magverse");
 
-    MemoryRegion region = process.getMemoryRegion("magverse", "r--p");
+    MemoryRegion region = process.getMemoryRegion("magverse", PROT_READ);
 
     printf("pid: %d\n", process.getPID());
 
@@ -46,9 +48,11 @@ int main(int argc, char** argv) {
     */
 
     // load shared lib and run "test" function from shared.so
+    
     MemoryRegion region_sharedlib = process.loadSharedLibrary("./examples/ImGuiGLFW/shared.so");
     printf("Shared lib loaded at: %p\n", region_sharedlib.getStart());
 
+    /*
     auto result = process.getGlobalOffsetAddress("glfwSwapBuffers")[0];
     printf("result: %p\n", result.offset);
 
@@ -58,6 +62,18 @@ int main(int argc, char** argv) {
     printf("got: %p\n", region.getStart() + result.offset);
 
     process.writeMemory<uint64_t>(region.getStart() + result.offset, sharedlib_addr, sizeof(uint64_t));
-
+    */
+    
+    MemoryRegion region_libglfw = process.getMemoryRegion("libglfw", PROT_READ);
+    uint64_t orig = region_libglfw.getSymbolAddress("glfwSwapBuffers");
+    uint64_t after = region_sharedlib.getSymbolAddress("__glfwSwapBuffers");
+    printf("Orig: %p\nAfter: %p\n", orig, after);
+    process.detourFunction(orig, after, Process::DetourOption::Replace);
+    
+/*
+    MemoryRegion rxp = process.getMemoryRegion("supertux2", "r-xp");
+    uint64_t offset = rxp.scanPatternOffset("\x48\x8b\x3d\x9c\xed\x35\x00", "xxxxxxxxxx", 7);
+    printf("Offset: %p\n", offset);
+*/
     return 0;
 }

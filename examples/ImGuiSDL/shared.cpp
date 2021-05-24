@@ -13,11 +13,15 @@
 #include "imgui/imgui_impl_opengl3.h"
 #include "imgui/imgui_impl_sdl.h"
 
+#include "../../src/MemoryModifier.h"
+#include "../../src/util.h"
+
 static SDL_Window* window = nullptr;
 
 static bool show_window = true;
 
 static SDL_GLContext gl_context;
+
 
 // This function is being replaced by mm with the
 // originial "glfwSwapWindow" function by replacing
@@ -74,6 +78,26 @@ extern "C" void __SDL_GL_SwapWindow (SDL_Window* win) {
 }
 
 void __attribute__ ((constructor)) init() {
+    Process self;
+
+    printf("Found map count: %zu\n", self.getMemoryRegions().size());
+
+    uint64_t offset = self.getGlobalOffsetAddress("SDL_GL_SwapWindow")[0].offset;
+    printf("offset: %p\n", offset);
+
+    printf("Exe path: %s\n", self.getPathToExe().c_str());
+
+    MemoryRegion main = self.getMemoryRegion(util::findNameByProcessId(getpid()), PROT_READ);
+
+    printf("sharedlib_addr: %p\n", __SDL_GL_SwapWindow);
+
+    uint64_t addr;
+    self.readMemory(main.getStart() + offset, addr, sizeof(uint64_t));
+    printf("found addr: %p\n", addr);
+
+    // Change got to our function
+    self.writeMemory(main.getStart() + offset, (uint64_t)__SDL_GL_SwapWindow, sizeof(uint64_t));
+
     printf("Loaded injected lib\n");
 }
 

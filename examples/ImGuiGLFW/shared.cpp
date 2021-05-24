@@ -24,6 +24,8 @@ static bool show_window = true;
 // the pointer in GOT.
 extern "C" void __glfwSwapBuffers (GLFWwindow* win) {
 
+    printf("hello from __glfwSwapBuffers!\n");
+
     if (window == nullptr) {
         window = win;
 

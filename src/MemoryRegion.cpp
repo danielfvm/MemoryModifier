@@ -98,3 +98,46 @@ uint64_t MemoryRegion::getSymbolOffset(const std::string& name) {
 uint64_t MemoryRegion::getSymbolAddress(const std::string& name) {
     return m_start + getSymbolOffset(name);
 }
+
+
+uint64_t MemoryRegion::scanPatternOffset(const char* signature, const char* mask, size_t size) const {
+    // Get file size
+    FILE *file = fopen(m_name.c_str(), "r");
+
+    if (file == nullptr) {
+        throw std::runtime_error("Failed to open shared lib: " + m_name);
+    }
+
+    if (fseek(file, 0, SEEK_END)) {
+        fclose(file);
+        throw std::runtime_error("Failed to determine size of shared lib: " + m_name);
+    }
+    long filesize = ftell(file);
+
+    // Load file to memory
+    void *bytes = mmap(nullptr, (size_t)filesize, PROT_READ, MAP_PRIVATE, fileno(file), 0);
+    if (bytes == nullptr) {
+        fclose(file);
+        throw std::runtime_error("Failed to open shared lib with mmap: " + m_name);
+    }
+    fclose(file);
+
+    for (long offset = 0; offset < filesize; offset += 1) {
+        for (size_t i = 0; i < size; i ++) {
+            if (mask[i] != '?' && signature[i] != ((char*)bytes + offset)[i]) {
+                break;
+            } else if (i == size - 1) {
+                return offset;
+            }
+        }
+    }
+
+    munmap(bytes, filesize);
+
+    // We didnt find pattern
+    return 0;
+}
+
+uint64_t MemoryRegion::scanPatternAddress(const char* signature, const char* mask, size_t size) const {
+    return m_start + scanPatternOffset(signature, mask, size);
+}

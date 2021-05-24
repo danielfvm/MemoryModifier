@@ -1,5 +1,8 @@
 #pragma once
 
+#include <sys/mman.h>
+#include <memory>
+#include <type_traits>
 #include <unistd.h>
 #include <string.h>
 #include <string>
@@ -24,6 +27,8 @@ private:
 
     std::string m_name;
 
+    std::string m_pathtoexe;
+
     std::vector<MemoryRegion> m_regions;
 
     void loadMemoryRegions();
@@ -33,19 +38,29 @@ public:
 
     Process(const std::string& name);
 
+    Process();
+
     ~Process();
+
+    void openProcess(pid_t pid);
 
     pid_t getPID() { return m_pid; }
 
-    std::string& getName() { return m_name; }
+    const std::string& getName() { return m_name; }
+
+    const std::string& getPathToExe() { return m_pathtoexe; }
+
+    uint64_t getStart() { return m_regions.front().getStart(); }
+
+    uint64_t getEnd() { return m_regions.at(m_regions.size()-2).getEnd(); }
 
     const std::vector<MemoryRegion>& getMemoryRegions() { return m_regions; }
 
-    const MemoryRegion& getMemoryRegion(const std::string& name, const char flags[4]);
+    const MemoryRegion& getMemoryRegion(const std::string& name, int prot);
 
-    const MemoryRegion& getMemoryRegion(const char flags[4]);
+    const MemoryRegion& getMemoryRegionFromProtection(int prot);
 
-    const MemoryRegion& getMemoryRegion(uint64_t addr);
+    const MemoryRegion& getMemoryRegionFromAddress(uint64_t addr);
 
     const MemoryRegion& loadSharedLibrary(const std::string& path);
 
@@ -57,59 +72,23 @@ public:
 
     uint64_t mallocString(const std::string& text);
 
-    /* scan for address by using provided signature */
-    std::vector<struct Relocation> scan(uint64_t from, uint64_t to, const char *signature, uint64_t signature_size);
-
     long writePayload(const MemoryRegion& m, const char *signature, uint64_t signature_size, const char *payload, uint64_t payload_size);
 
     std::vector<Relocation> getGlobalOffsetAddress(const std::string& name);
 
-    template<typename T>
-    bool writeMemory(uint64_t address, const T& buffer, uint64_t size = sizeof(T)) {
-        lseek(m_mem, address, SEEK_SET);
+    uint64_t scanPatternAddress(uint64_t addr, const char* pattern, const char* mask, size_t pattern_size);
 
-        char* bytes = (char*) malloc(size);
-        memcpy(bytes, std::addressof(buffer), size);
+    enum DetourOption {
+        Replace,
+        Before,
+        After
+    };
 
-        if (std::is_pointer<T>::value) {
-            memcpy(bytes, (void*)buffer, size);
-        } else {
-            memcpy(bytes, (void*)std::addressof(buffer), size);
-        }
-
-        if (!write(m_mem, bytes, size)) {
-            return false;
-        }
-
-        free(bytes);
-
-        lseek(m_mem, 0, SEEK_SET);
-
-        return true;
-    }
-
+    bool detourFunction(uint64_t from_addr, uint64_t to_addr, DetourOption option);
 
     template<typename T>
-    bool readMemory(uint64_t address, const T& buffer, uint64_t size = sizeof(T)) {
-        lseek(m_mem, address, SEEK_SET);
+    bool writeMemory(uint64_t address, const T& buffer, uint64_t size = sizeof(T));
 
-        char* bytes = (char*) malloc(size);
-
-        if (!read(m_mem, bytes, size)) {
-            free(bytes);
-            return false;
-        }
-
-        if (std::is_pointer<T>::value) {
-            memcpy((void*)buffer, bytes, size);
-        } else {
-            memcpy((void*)std::addressof(buffer), bytes, size);
-        }
-
-        free(bytes);
-
-        lseek(m_mem, 0, SEEK_SET);
-
-        return true;
-    }
+    template<typename T>
+    bool readMemory(uint64_t address, const T& buffer, uint64_t size = sizeof(T));
 };

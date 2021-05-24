@@ -1,5 +1,7 @@
 #include "MemoryModifier.h"
 
+#include <sys/mman.h>
+#include <libgen.h>
 #include <stdlib.h>
 #include <string.h> 
 #include <dirent.h>
@@ -60,12 +62,29 @@ namespace util {
 
         fseek(statusfile, 6, SEEK_SET);
         fgets(statusstring, 32, statusfile);
+
         fclose(statusfile);
 
         // delete \n at the end
         statusstring[strlen(statusstring)-1] = '\0';
 
         return statusstring;
+    }
+
+
+    inline std::string findPathToExeByProcessId(pid_t pid) {
+        char exefile[64];
+        char path[64];
+
+        size_t buff_len;
+
+        sprintf(exefile, "/proc/%d/exe", pid);
+
+        if ((buff_len = readlink (exefile, path, 63)) == -1) {
+            throw std::runtime_error("Failed to fetch filepath to exe of pid: " + std::to_string(pid));
+        }
+
+        return std::string(path);
     }
 
 
@@ -90,11 +109,13 @@ namespace util {
         while (fgets(info, 512, f_maps)) {
             if (sscanf(info, "%lx-%lx %s %*s %*d:%*d %*d %s", &start, &end, flags, name) != 4) {
                 memset(name, 0, 256);
-            } else { 
-    //            printf("%lx-%lx %s %.*s\n", region.m_start, region.m_end, region.m_name, 4, region.m_flags);
             }
 
-            regions.push_back(MemoryRegion(name, info, flags, start, end));
+            int prot = (flags[0] == 'r' ? PROT_READ  : 0) |
+                       (flags[1] == 'w' ? PROT_WRITE : 0) |
+                       (flags[2] == 'x' ? PROT_EXEC  : 0);
+
+            regions.push_back(MemoryRegion(name, info, prot, start, end));
         }
 
         fclose(f_maps);

@@ -15,6 +15,26 @@
 #include <elf.h>
 
 Process::Process(pid_t pid) {
+    openProcess(pid);
+}
+
+Process::Process(const std::string& name) {
+    openProcess(util::findProcessIdByName(name));
+}
+
+Process::Process() {
+    m_pid = getpid();
+    m_name = util::findNameByProcessId(m_pid);
+    m_regions = util::findMemoryRegionsByProcessId(m_pid);
+    m_pathtoexe = util::findPathToExeByProcessId(m_pid);
+    m_mem = 0;
+}
+
+Process::~Process() {
+    close(m_mem);
+}
+
+void Process::openProcess(pid_t pid) {
     m_pid = pid;
     m_name = util::findNameByProcessId(m_pid);
     m_regions = util::findMemoryRegionsByProcessId(m_pid);
@@ -28,40 +48,25 @@ Process::Process(pid_t pid) {
     }
 }
 
-Process::Process(const std::string& name) {
-    m_pid = util::findProcessIdByName(name);
-    m_name = util::findNameByProcessId(m_pid);
-    m_regions = util::findMemoryRegionsByProcessId(m_pid);
-
-    char memfile[100];
-    sprintf(memfile, "/proc/%d/mem", m_pid);
-
-    // Open filedescriptor for the process memory file
-    if ((m_mem = open(memfile, O_RDWR)) < 0) {
-        throw std::runtime_error("Failed to inject into memory, forgot sudo?");
-    }
-}
-
-
-const MemoryRegion& Process::getMemoryRegion(const std::string& name, const char flags[4]) {
+const MemoryRegion& Process::getMemoryRegion(const std::string& name, int prot) {
     for (auto it = m_regions.begin(); it != m_regions.end(); ++ it) {
-        if (strstr(it->getName().c_str(), name.c_str()) != nullptr && memcmp(it->getFlags(), flags, 4) == 0) {
+        if (strstr(it->getName().c_str(), name.c_str()) != nullptr && it->getProt() == prot) {
             return *it;
         }
     }
-    throw std::runtime_error("Failed to find MemoryRegion: " + name + " " + flags);
+    throw std::runtime_error("Failed to find MemoryRegion: " + name + " " + std::to_string(prot));
 }
 
-const MemoryRegion& Process::getMemoryRegion(const char flags[4]) {
+const MemoryRegion& Process::getMemoryRegionFromProtection(int prot) {
     for (auto it = m_regions.begin(); it != m_regions.end(); ++ it) {
-        if (memcmp(it->getFlags(), flags, 4) == 0) {
+        if (it->getProt() == prot) {
             return *it;
         }
     }
-    throw std::runtime_error(std::string("Failed to find MemoryRegion with flags: ") + flags);
+    throw std::runtime_error("Failed to find MemoryRegion with prot: " + std::to_string(prot));
 }
 
-const MemoryRegion& Process::getMemoryRegion(uint64_t addr) {
+const MemoryRegion& Process::getMemoryRegionFromAddress(uint64_t addr) {
     for (auto it = m_regions.begin(); it != m_regions.end(); ++ it) {
         if (it->getStart() <= addr && addr <= it->getEnd()) {
             return *it;
@@ -80,33 +85,45 @@ const MemoryRegion& Process::loadSharedLibrary(const std::string& filename) {
 
     std::string fullpath = std::string(cfullpath);
 
-    uint64_t __libc_dlopen_mode_addr = getLibcFunction("__libc_dlopen_mode");
-    uint64_t free_addr = getLibcFunction("free");
-    uint64_t path_addr = mallocString(fullpath);
+    uint64_t handle;
 
-    // If shared library has already been loaded, first unload it
-    try {
-        unloadSharedLibrary(getMemoryRegion(fullpath, "r--p"));
-    } catch(...) {}
+    if (m_mem == 0) {
+        handle = (uint64_t) dlopen(cfullpath, RTLD_LAZY);
+
+        // If handle is zero, __libc__dlopen_mode failed opening shared lib
+        if (handle == 0) {
+            throw std::runtime_error("Failed to run __libc_dlopen_mode for shared library: " + fullpath);
+        }
+    } else {
+        uint64_t __libc_dlopen_mode_addr = getLibcFunction("__libc_dlopen_mode");
+        uint64_t free_addr = getLibcFunction("free");
+        uint64_t path_addr = mallocString(fullpath);
+
+        // If shared library has already been loaded, first unload it
+        try {
+            unloadSharedLibrary(getMemoryRegion(fullpath, PROT_READ));
+        } catch(...) {}
 
 
-    // Call __libc_dlopen_mode function
-    uint64_t handle = runFunction(__libc_dlopen_mode_addr, path_addr, RTLD_LAZY);
+        // Call __libc_dlopen_mode function
+        handle = runFunction(__libc_dlopen_mode_addr, path_addr, RTLD_LAZY);
 
-    // If handle is zero, __libc__dlopen_mode failed opening shared lib
-    if (handle == 0) {
-        throw std::runtime_error("Failed to run __libc_dlopen_mode for shared library: " + fullpath);
+        // If handle is zero, __libc__dlopen_mode failed opening shared lib
+        if (handle == 0) {
+            throw std::runtime_error("Failed to run __libc_dlopen_mode for shared library: " + fullpath);
+        }
+
+        // Free path string from memory
+        runFunction(free_addr, path_addr);
+
+        // Update MemoryRegions, we should find our new loaded
+        // shared library with getMemoryRegion after this.
+        m_regions = util::findMemoryRegionsByProcessId(m_pid);
+
     }
 
-    // Free path string from memory
-    runFunction(free_addr, path_addr);
-
-    // Update MemoryRegions, we should find our new loaded
-    // shared library with getMemoryRegion after this.
-    m_regions = util::findMemoryRegionsByProcessId(m_pid);
-
     try {
-        const MemoryRegion& region = getMemoryRegion(fullpath, "r--p");
+        const MemoryRegion& region = getMemoryRegion(fullpath, PROT_READ);
 
         // If we are here, we sucessfully loaded our shared library.
         // Now we do some hacky trick to get the handler back for unloading.
@@ -115,7 +132,7 @@ const MemoryRegion& Process::loadSharedLibrary(const std::string& filename) {
         writeMemory<uint64_t>(region.getStart(), handle, sizeof(uint64_t));
 
         return region;
-    } catch(std::runtime_error e) {
+    } catch (...) {
         throw std::runtime_error("Couldn't find recently loaded shared library: " + fullpath);
     }
 }
@@ -142,7 +159,13 @@ bool Process::unloadSharedLibrary(const MemoryRegion& library) {
     }
 
     // Run __libc_dlclose on handle
-    bool was_unloaded = runFunction(getLibcFunction("__libc_dlclose"), handle) == 0;
+    bool was_unloaded;
+   
+    if (m_mem == 0) {
+        was_unloaded = dlclose((void*)handle);
+    } else {
+        was_unloaded = runFunction(getLibcFunction("__libc_dlclose"), handle) == 0;
+    }
 
     // Update memory regions, if __libc__dlclose was able to close a lib
     if (was_unloaded) {
@@ -150,10 +173,6 @@ bool Process::unloadSharedLibrary(const MemoryRegion& library) {
     }
 
     return was_unloaded;
-}
-
-Process::~Process() {
-    close(m_mem);
 }
 
 uint64_t Process::runFunction(const uint64_t address, uint64_t p1, uint64_t p2, uint64_t p3, uint64_t p4, uint64_t p5, uint64_t p6) {
@@ -169,7 +188,7 @@ uint64_t Process::runFunction(const uint64_t address, uint64_t p1, uint64_t p2, 
     ptrace_getregs(m_pid, &regs);
     memcpy(&regs_backup, &regs, sizeof(struct REG_TYPE));
 
-    uint64_t exec_addr = getMemoryRegion(m_name, "r-xp").getStart() + sizeof(long);
+    uint64_t exec_addr = getMemoryRegion(m_name, PROT_READ | PROT_EXEC).getStart() + sizeof(long);
 
     // Write parameters
     regs.rax = address;
@@ -206,9 +225,8 @@ uint64_t Process::runFunction(const uint64_t address, uint64_t p1, uint64_t p2, 
 }
 
 uint64_t Process::getLibcFunction(const std::string& name) {
-    MemoryRegion libc = getMemoryRegion("libc-", "r--p");
-    uint64_t addr = libc.getSymbolAddress(name);
-    return addr;
+    MemoryRegion libc = getMemoryRegion("libc-", PROT_READ);
+    return libc.getSymbolAddress(name);
 }
 
 uint64_t Process::mallocString(const std::string& text) {
@@ -223,7 +241,7 @@ uint64_t Process::mallocString(const std::string& text) {
 
 std::vector<Relocation> Process::getGlobalOffsetAddress(const std::string& name) {
 
-    MemoryRegion mr = getMemoryRegion(m_name, "r--p");
+    MemoryRegion mr = getMemoryRegion(m_name, PROT_READ);
 
     // Get file size
     FILE *file = fopen(mr.getName().c_str(), "r");
@@ -321,4 +339,119 @@ std::vector<Relocation> Process::getGlobalOffsetAddress(const std::string& name)
     munmap(bytes, file_size);
 
     return relocations;
+}
+
+uint64_t Process::scanPatternAddress(uint64_t addr, const char* signature, const char* mask, size_t size) {
+    char* memory = (char*) malloc(size * 2);
+
+    for (; addr < getEnd() - size; addr += size) {
+        readMemory<char*>(addr, memory, size * 2);
+        for (size_t j = 0; j < size; j ++) {
+            for (size_t i = 0; i < size; i ++) {
+                if (mask[i] != '?' && signature[i] != memory[i+j]) {
+                    break;
+                } else if (i == size - 1) {
+                    free(memory);
+                    return addr + i + j;
+                }
+            }
+        }
+    }
+
+    free(memory);
+    return 0;
+}
+
+#define JMP_SIZE 6
+
+bool Process::detourFunction(uint64_t orig_addr, uint64_t new_addr, DetourOption option) {
+
+    // jmp addr ret
+    unsigned char jmp_code[JMP_SIZE] = { 0xe9, 0x90, 0x90, 0x90, 0x90, 0xc9 };
+    uint32_t jmp_offset = new_addr - orig_addr - 5;
+
+    // Replace NOP with offset to new function
+    memcpy(jmp_code + 1, &jmp_offset, 4);
+
+    if (option != DetourOption::After) {
+        writeMemory(orig_addr, jmp_code, JMP_SIZE);
+    }
+
+    // Search for end of function, ending with:
+    // pop %rbp     5d
+    // ret          c3
+    /*uint64_t from_end_addr = scanPatternAddress(from_addr, "\x5d\xc3", "xx", 2);
+    uint64_t to_end_addr = scanPatternAddress(to_addr, "\x5d\xc3", "xx", 2);
+
+    if (option == DetourOption::Before) {
+        writeMemory(to_end_addr, 0xe9, 1);
+        writeMemory(to_end_addr + 1, from_addr + 4, sizeof(uint64_t));
+    }*/
+
+    return true;
+}
+
+template<typename T>
+bool Process::writeMemory(uint64_t address, const T& buffer, uint64_t size) {
+    void* from = std::is_pointer<T>::value ? (void*)buffer : (void*)std::addressof(buffer);
+
+    if (m_mem == 0) {
+        const MemoryRegion& region = getMemoryRegionFromAddress(address);
+
+        if (mprotect((void*)region.getStart(), region.getSize(), PROT_READ | PROT_WRITE) != 0) {
+            return false;
+        }
+
+        bool success = memcpy((void*)address, from, size) != nullptr;
+
+        if (mprotect((void*)region.getStart(), region.getSize(), region.getProt()) != 0) {
+            return false;
+        }
+
+        return success;
+    } else {
+        lseek(m_mem, address, SEEK_SET);
+
+        char* bytes = (char*) malloc(size);
+
+        if (memcpy(bytes, from, size) == nullptr) {
+            return false;
+        }
+
+        if (!write(m_mem, bytes, size)) {
+            return false;
+        }
+
+        free(bytes);
+
+        lseek(m_mem, 0, SEEK_SET);
+
+        return true;
+    }
+}
+
+template<typename T>
+bool Process::readMemory(uint64_t address, const T& buffer, uint64_t size) {
+    void* to = std::is_pointer<T>::value ? (void*)buffer : (void*)std::addressof(buffer);
+
+    if (m_mem == 0) {
+        return memcpy(to, (void*)address, size) != nullptr;
+    } else {
+        lseek(m_mem, address, SEEK_SET);
+
+        char* bytes = (char*) malloc(size);
+
+        if (!read(m_mem, bytes, size)) {
+            free(bytes);
+            return false;
+        }
+
+        memcpy(to, bytes, size);
+
+        free(bytes);
+
+        lseek(m_mem, 0, SEEK_SET);
+
+        return true;
+    }
 }
