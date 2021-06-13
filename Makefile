@@ -3,7 +3,7 @@ CFLAGS = -fPIC -c -g -Wall
 LDFLAGS = -shared -fPIC -ldl
 TARGET = libmemmod.so
 
-SOURCE = src/Process.cpp src/MemoryRegion.cpp src/ptrace.cpp
+SOURCE = src/Process.cpp src/MemoryRegion.cpp src/MonoManager.cpp src/ptrace.cpp src/util.cpp
 OBJ = $(subst src, obj, $(SOURCE:.cpp=.o))
 
 all: folders $(SOURCE) $(TARGET)
@@ -18,7 +18,8 @@ folders:
 	mkdir -p bin obj
 
 install: all
-	sudo cp src/MemoryModifier.h /usr/include/MemoryModifier.h
+	sudo mkdir -p /usr/include/MemoryModifier
+	sudo cp src/*.h /usr/include/MemoryModifier/.
 	sudo cp bin/$(TARGET) /usr/lib/$(TARGET)
 
 uninstall:

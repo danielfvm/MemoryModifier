@@ -24,7 +24,7 @@ static SDL_GLContext gl_context;
 
 static Process* self = nullptr;
 
-unsigned char funcbackup[14];
+unsigned char funcbackup[6];
 uint64_t funcaddr;
 
 
@@ -32,7 +32,7 @@ uint64_t funcaddr;
 // originial "glfwSwapWindow" function by replacing
 // the pointer in GOT.
 extern "C" void __SDL_GL_SwapWindow (SDL_Window* win) {
-    self->writeMemory<unsigned char*>(funcaddr, funcbackup, 13);
+    self->writeMemory<unsigned char*>(funcaddr, funcbackup, 6);
 
 	static SDL_GLContext original_context = SDL_GL_GetCurrentContext();
 

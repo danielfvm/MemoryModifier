@@ -68,9 +68,7 @@ int main(int argc, char** argv) {
     uint64_t orig = region_libglfw.getSymbolAddress("glfwSwapBuffers");
     uint64_t after = region_sharedlib.getSymbolAddress("__glfwSwapBuffers");
     printf("Orig: %p\nAfter: %p\n", orig, after);
-
-    unsigned char backup[6];
-    process.detourFunction(orig, after, backup);
+    process.detourFunction(orig, after, Process::DetourOption::Replace);
     
 /*
     MemoryRegion rxp = process.getMemoryRegion("supertux2", "r-xp");

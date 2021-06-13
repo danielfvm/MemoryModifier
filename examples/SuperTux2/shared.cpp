@@ -1,5 +1,6 @@
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#include <SDL2/SDL_keycode.h>
 #endif
 
 #include <GL/gl.h>
@@ -24,16 +25,21 @@ static SDL_GLContext gl_context;
 
 static Process* self = nullptr;
 
-unsigned char funcbackup[14];
-uint64_t funcaddr;
+intptr_t STATUS_ADDR;
+const int STATUS_COINS_OFFSET = 0x0;
+const int STATUS_LVL_OFFSET = 0x4;
+const int STATUS_FIRE_OFFSET = 0x8;
+
+
+intptr_t POSITION_ADDR;
+const int POSITION_X_OFFSET = 0x70;
+const int POSITION_Y_OFFSET = 0x74;
 
 
 // This function is being replaced by mm with the
 // originial "glfwSwapWindow" function by replacing
 // the pointer in GOT.
 extern "C" void __SDL_GL_SwapWindow (SDL_Window* win) {
-    self->writeMemory<unsigned char*>(funcaddr, funcbackup, 13);
-
 	static SDL_GLContext original_context = SDL_GL_GetCurrentContext();
 
     if (window == nullptr) {
@@ -66,11 +72,17 @@ extern "C" void __SDL_GL_SwapWindow (SDL_Window* win) {
 
     if (show_window) {
         // Pass a pointer to our bool variable
-        ImGui::Begin("ImGui Menu", &show_window);   
-        ImGui::Text("Was injected from outside!");
-        if (ImGui::Button("Close Me")) {
-            show_window = false;
+        ImGui::Begin("Cheat Menu", &show_window);   
+
+        if (ImGui::Button("Max up tux")) {
+            self->writeMemory<int>(STATUS_ADDR+STATUS_LVL_OFFSET, 2);
+            self->writeMemory<int>(STATUS_ADDR+STATUS_FIRE_OFFSET, 9999);
         }
+
+        if (ImGui::Button("Infinite coins")) {
+            self->writeMemory<int>(STATUS_ADDR+STATUS_COINS_OFFSET, 99999);
+        }
+
         ImGui::End();
     }
 
@@ -81,37 +93,16 @@ extern "C" void __SDL_GL_SwapWindow (SDL_Window* win) {
     // Call original function to update window
     SDL_GL_MakeCurrent(window, original_context);
     SDL_GL_SwapWindow(win);
-
-    self->detourFunction(funcaddr, (uint64_t)__SDL_GL_SwapWindow, funcbackup);
 }
 
 void __attribute__ ((constructor)) init() {
     self = new Process();
 
-    printf("Found map count: %zu\n", self->getMemoryRegions().size());
+    STATUS_ADDR = self->getAddressFromPointerString("[[[/usr/bin/supertux2+0x5b8]+0xf8]+0x20]+0x0");
+    POSITION_ADDR = self->getAddressFromPointerString("[[[/usr/bin/supertux2+0x7e0]+0x10]+0x8]+0x0");
 
-    uint64_t offset = self->getGlobalOffsetAddress("SDL_GL_SwapWindow")[0].offset;
-    printf("offset: %p\n", offset);
-
-    printf("Exe path: %s\n", self->getPathToExe().c_str());
-
-    MemoryRegion main = self->getMemoryRegion(util::findNameByProcessId(getpid()), PROT_READ);
-
-    printf("sharedlib_addr: %p\n", __SDL_GL_SwapWindow);
-
-    /*
-    uint64_t addr;
-    self.readMemory(main.getStart() + offset, addr, sizeof(uint64_t));
-    printf("found addr: %p\n", addr);
-    */
-
-    MemoryRegion region_libsdl = self->getMemoryRegion("libSDL2-2.0", PROT_READ);
-    funcaddr = region_libsdl.getSymbolAddress("SDL_GL_SwapWindow");
-    printf("addr: %p\n", funcaddr);
-    self->detourFunction(funcaddr, (uint64_t)__SDL_GL_SwapWindow, funcbackup);
-
-    // Change got to our function
-    //self.writeMemory(main.getStart() + offset, (uint64_t)__SDL_GL_SwapWindow, sizeof(uint64_t));
+    printf("Found status at: %p\n", STATUS_ADDR);
+    printf("Found position at: %p\n", POSITION_ADDR);
 
     printf("Loaded injected lib\n");
 }

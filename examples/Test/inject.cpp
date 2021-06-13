@@ -29,27 +29,19 @@
 int main(int argc, char** argv) {
 
     // Open process with process name "magverse"
-    Process process("supertux");
+    Process process("a.out");
 
     // Print process id
     printf("PID: %d\n", process.getPID());
 
     // Load shared lib and run "test" function from shared.so
-    MemoryRegion region_sharedlib = process.loadSharedLibrary("shared.so");
+    const MemoryRegion& region_sharedlib = process.loadSharedLibrary("shared.so");
     printf("Shared lib loaded at: %p\n", (void*)region_sharedlib.getStart());
 
     // Get Global Offset Address pointing to SDL_GL_SwapWindow
-    auto result = process.getGlobalOffsetAddress("SDL_GL_SwapWindow")[0];
+    //auto result = process.getGlobalOffsetAddress("test")[0];
 
-    printf("sdl_gl_swapwindow: %p\n", (void*)result.offset);
-
-    // Get our modified "__glfwSwapWindow" located in our shared libaray.
-    //uint64_t sharedlib_addr = region_sharedlib.getSymbolAddress("__SDL_GL_SwapWindow");
-
-    //printf("sharedlib_addr: %p\n", (void*)sharedlib_addr);
-
-    // Replace the pointer in the GOT with our modified function
-//    process.writeMemory<uint64_t>(process.getStart() + result.offset, sharedlib_addr, sizeof(uint64_t));
+    //printf("hook addr: %p\n", (void*)result.offset);
 
     return 0;
 }

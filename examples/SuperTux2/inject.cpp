@@ -28,8 +28,8 @@
 
 int main(int argc, char** argv) {
 
-    // Open process with process name "magverse"
-    Process process("supertux");
+    // Open process
+    Process process("supertux2");
 
     // Print process id
     printf("PID: %d\n", process.getPID());
@@ -44,12 +44,10 @@ int main(int argc, char** argv) {
     printf("sdl_gl_swapwindow: %p\n", (void*)result.offset);
 
     // Get our modified "__glfwSwapWindow" located in our shared libaray.
-    //uint64_t sharedlib_addr = region_sharedlib.getSymbolAddress("__SDL_GL_SwapWindow");
-
-    //printf("sharedlib_addr: %p\n", (void*)sharedlib_addr);
+    uint64_t sharedlib_addr = region_sharedlib.getSymbolAddress("__SDL_GL_SwapWindow");
 
     // Replace the pointer in the GOT with our modified function
-//    process.writeMemory<uint64_t>(process.getStart() + result.offset, sharedlib_addr, sizeof(uint64_t));
+    process.writeMemory<uint64_t>(process.getStart() + result.offset, sharedlib_addr, sizeof(uint64_t));
 
     return 0;
 }
